@@ -21,7 +21,7 @@ model_path() {
 require_file() {
   if [ ! -f "$1" ]; then
     echo "ERROR: File not found: $1" >&2
-    echo "Run scripts/download-model.sh '<repo-id>' '<filename>' on the relevant Mac." >&2
+    echo "Run scripts/download-model.sh 'owner/repo' --file 'filename.gguf' on the relevant Mac." >&2
     exit 2
   fi
 }

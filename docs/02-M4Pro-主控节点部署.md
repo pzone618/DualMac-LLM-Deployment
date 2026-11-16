@@ -112,28 +112,38 @@ LLAMA_CPP_REF=PASTE_FULL_GIT_SHA_HERE
 
 ## 5. 下载测试模型（M4）
 
+本包 v1.1 支持 `huggingface.co` / `hf-mirror.com`。默认 `HF_SOURCE=auto`；`--source mirror` 显式优先使用镜像。aria2 会保留 `.aria2` 断点数据，网络断开后**重跑相同命令**即可尝试恢复（前提是服务器支持 HTTP Range）。
+
 ```bash
 cd ~/AI/dual-mac-cluster
-./scripts/download-model.sh \
-  ggml-org/gemma-3-1b-it-GGUF \
+# 官方站 -> 镜像站自动切换
+./scripts/download-model.sh ggml-org/gemma-3-1b-it-GGUF \
+  --file gemma-3-1b-it-Q4_K_M.gguf --source auto
+
+# 需要镜像时：
+./scripts/download-model.sh ggml-org/gemma-3-1b-it-GGUF \
+  --file gemma-3-1b-it-Q4_K_M.gguf --source mirror
+
+# SHA256 验证已下载文件
+./scripts/download-model.sh verify ggml-org/gemma-3-1b-it-GGUF \
   gemma-3-1b-it-Q4_K_M.gguf
 ```
 
-目标文件：
+模型将保存到：
 
 ```text
 ~/AI/models/ggml-org__gemma-3-1b-it-GGUF/gemma-3-1b-it-Q4_K_M.gguf
 ```
 
-如需通过 M4 给 M6 下载安装，可在 SSH 配好且 M6 bootstrap 完成后：
+M6 bootstrap/SSH 配置完成后，可在 M4 统一下载：
 
 ```bash
-./scripts/model-manager.sh download m6 \
-  ggml-org/gemma-3-1b-it-GGUF gemma-3-1b-it-Q4_K_M.gguf
+./scripts/model-manager.sh download m6 ggml-org/gemma-3-1b-it-GGUF \
+  --file gemma-3-1b-it-Q4_K_M.gguf --source mirror
 ./scripts/model-manager.sh inventory
 ```
 
-不要误将大仓库全部下载；本包模型下载脚本只接收**单文件** `.gguf`。分片模型须单独使用 HF CLI 下载所有分片并传给 llama.cpp 首片路径；本包模式脚本暂不自动处理分片模型。
+分片模型使用 `--pattern` 下载匹配的全部分片。私有/需申请许可的模型只能使用 `--source official --engine hf`。完整示例与切换源站的安全机制详见 [`04-模型下载与镜像切换.md`](04-模型下载与镜像切换.md)。
 
 ## 6. 首次独立运行（手动验证，前台）
 

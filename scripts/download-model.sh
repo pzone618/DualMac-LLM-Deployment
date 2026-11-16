@@ -1,19 +1,18 @@
 #!/bin/bash
+# Both nodes: verified, resumable GGUF download from official HF or hf-mirror.com.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/common.sh"
-repo="${1:-${MODEL_REPO}}"
-file="${2:-${MODEL_FILE}}"
-# Guard names sent through SSH and paths from accidental traversal.
-if ! [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || \
-   ! [[ "$file" =~ ^[A-Za-z0-9_.-]+\.gguf$ ]]; then
-  echo 'ERROR: expected: download-model.sh owner/repository filename.gguf' >&2
-  echo 'For sharded GGUF, use hf download with --include and the official model instructions.' >&2
-  exit 2
+PYTHON="$AI_ROOT/.venv/bin/python"
+require_exec "$PYTHON"
+if [[ "${1:-}" == verify ]]; then
+  shift
+  exec "$PYTHON" "$ROOT/scripts/hf_download.py" verify "$@" --root "$AI_ROOT/models"
 fi
-HF="$AI_ROOT/.venv/bin/hf"
-if [ ! -x "$HF" ]; then echo "Missing $HF; run bootstrap.sh first." >&2; exit 2; fi
-dest="$AI_ROOT/models/${repo//\//__}"
-mkdir -p "$dest"
-"$HF" download "$repo" "$file" --local-dir "$dest"
-echo "Downloaded: $dest/$file"
+args=("$@")
+source_set=0
+for ((i=0; i<${#args[@]}; i++)); do
+  if [[ "${args[i]}" == --source ]]; then source_set=1; break; fi
+done
+if [[ $source_set -eq 0 ]]; then args+=(--source "${HF_SOURCE:-auto}"); fi
+exec "$PYTHON" "$ROOT/scripts/hf_download.py" download "${args[@]}" --root "$AI_ROOT/models"

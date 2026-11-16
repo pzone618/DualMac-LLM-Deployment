@@ -1,45 +1,78 @@
-# Dual Mac LLM Cluster 部署包
+# Dual Mac LLM Cluster｜双 Mac 本地 AI 集群 v1.1
 
-**版本：v1.0 · 2026-11-16 · 语言：中文**
+**日期：2026-11-16** · 中文部署资料 · 面向 **Mac mini M4 Pro 24GB + Mac mini M6 24GB + Thunderbolt 5 线缆**。
 
-适用于 **Mac mini M4 Pro 24GB（主控）+ Mac mini M6 24GB（工作节点）+ Thunderbolt 5 线缆**。实现两种运行模式：
+## 包含内容
 
-- 独立：M4 Pro 与 M6 各运行自己的 `llama-server`。
-- 分布式：M4 Pro 运行 `llama-server --rpc`，M6 运行 `ggml-rpc-server`。
+- `docs/01-总体方案.md`：角色与网络、需求、架构、切换方式、安全与验收
+- `docs/02-M4Pro-主控节点部署.md`：M4 Pro 上从零执行的流程
+- `docs/03-M6-工作节点部署.md`：M6 上从零执行的流程
+- `docs/04-模型下载与镜像切换.md`：**v1.1 新增** Hugging Face / hf-mirror.com、断点续传、SHA256、分片与双机同步
+- `scripts/`：双机安装、模型管理、模式切换、推理与 RPC 启停脚本
+- `config/cluster.env.example`：两台机器各自复制的配置模板
+- `tests/`：无需连接真实 Hugging Face 的核心逻辑单元测试
 
-**已核对的硬件限制**：M4 Pro 具备 Thunderbolt 5，但 **M6 标准版只有 Thunderbolt 4**。雷电 5 线缆不等于两端都具备雷电 5 硬件。本包明确采用 **Thunderbolt Bridge TCP**；不执行 `rdma_ctl enable`。
+## ⚠️ 硬件和安全
 
-## 从哪里开始
+Apple 规格显示，**标准 M6 Mac mini 是 Thunderbolt 4**，M4 Pro 是 Thunderbolt 5。因此采用 **Thunderbolt Bridge + TCP + llama.cpp RPC**，不以 RDMA 为前提。模型权重可以分布在两机，但**24GB + 24GB 不是一块 48GB 统一内存**。RPC 实验性且不适用于开放网络。
 
-1. 双机都先读 [`docs/01-总体方案.md`](docs/01-总体方案.md)。
-2. M4 Pro 专用：[`docs/02-M4Pro-主控节点部署.md`](docs/02-M4Pro-主控节点部署.md)。
-3. M6 专用：[`docs/03-M6-工作节点部署.md`](docs/03-M6-工作节点部署.md)。
-4. 两台 Mac 的部署包统一存放在：`~/AI/dual-mac-cluster/`（必须保持相同路径，方便远程管理）。
-5. 复制 `config/cluster.env.example` 到 `config/cluster.env`，按需修改 `M6_USER` 和版本锁定 `LLAMA_CPP_REF`。
+## 先复制部署包
 
-本包的脚本是基于官方文档制作的部署起点，尚未在你的两台真实 Mac 上运行验证。首轮必须先测试小模型；RPC 在官方标记为实验性，请仅在可信网络运行。
+两台 Mac 都将本 ZIP 解压到 `$HOME/AI/dual-mac-cluster`，例如从 `~/Downloads` 执行：
 
-## 主要命令（全部在 M4 Pro 执行）
+```bash
+mkdir -p ~/AI
+unzip -q ~/Downloads/DualMac-LLM-Deployment-v1.1.zip -d ~/AI
+mv ~/AI/DualMac-LLM-Deployment-v1.1 ~/AI/dual-mac-cluster
+cd ~/AI/dual-mac-cluster
+cp config/cluster.env.example config/cluster.env
+nano config/cluster.env
+```
+
+如果路径已有目录，先备份，勿直接覆盖个人配置。两台按 02、03 的顺序操作，先网络和 SSH，再 bootstrap、模型下载、独立模式、分布式模式。
+
+## 下载：官方站 / 镜像站 / 自动切换
+
+双机管理命令都在 **M4 Pro** 上运行，M6 可通过 SSH 执行：
 
 ```bash
 cd ~/AI/dual-mac-cluster
-./scripts/cluster-mode.sh local
-./scripts/cluster-mode.sh distributed
-./scripts/cluster-mode.sh status
-./scripts/cluster-mode.sh stop
-./scripts/model-manager.sh inventory
-./scripts/model-manager.sh download m4 ggml-org/gemma-3-1b-it-GGUF gemma-3-1b-it-Q4_K_M.gguf
-./scripts/model-manager.sh download m6 ggml-org/gemma-3-1b-it-GGUF gemma-3-1b-it-Q4_K_M.gguf
+
+# 自动：先 official，失败再 hf-mirror.com
+./scripts/model-manager.sh download both ggml-org/gemma-3-1b-it-GGUF \
+  --file gemma-3-1b-it-Q4_K_M.gguf --source auto
+
+# 如果官方站慢/不可达，显式指定 hf-mirror.com
+./scripts/model-manager.sh download m4 ggml-org/gemma-3-1b-it-GGUF \
+  --file gemma-3-1b-it-Q4_K_M.gguf --source mirror
+
+# 恢复下载：重跑相同命令即可（aria2 源站须支持 Range）
+# 下载后检验：
+./scripts/model-manager.sh verify both ggml-org/gemma-3-1b-it-GGUF \
+  gemma-3-1b-it-Q4_K_M.gguf
 ```
 
-说明：`local` 只影响此部署包创建的 tmux 会话。服务可通过 `tmux ls` 检查，日志在 `~/AI/logs/`。
+配置文件中 `HF_SOURCE=auto|official|mirror` 定义默认模式；命令行 `--source` 可临时覆盖。**私有/gated 仓库必须用 `--source official --engine hf`**，镜像站不接收认证 Token。详见 [下载手册](docs/04-模型下载与镜像切换.md)。
+
+## 集群模式
+
+```bash
+./scripts/cluster-mode.sh local        # M4 / M6 各自独立推理
+./scripts/cluster-mode.sh distributed  # M4 llama-server + M6 RPC Worker
+./scripts/cluster-mode.sh status
+./scripts/cluster-mode.sh stop
+```
+
+独立 HTTP: M4 `127.0.0.1:8081`，M6 `10.77.0.2:8082`。分布式 HTTP: M4 `127.0.0.1:8083`。RPC: M6 `10.77.0.2:50052`。IP/端口可在 `config/cluster.env` 调整。
+
+**验证边界**：脚本已经过语法检查和核心逻辑单元测试，但**没有在两台实体 Mac 的 Apple Metal、Thunderbolt、RPC 环境中运行端到端测试**。先用 1B 模型逐步验收，再测试更大型模型。llamactl/Open WebUI 仍是可选的第二阶段手动集成，不宣称一键配置 Web Dashboard。
 
 ## 官方资料
 
-- Apple M6 ports: https://support.apple.com/en-us/128108
-- Apple M4 Pro ports: https://support.apple.com/en-us/121555
-- Apple RDMA TN3205: https://developer.apple.com/documentation/technotes/tn3205-low-latency-communication-with-rdma-over-thunderbolt
-- llama.cpp RPC: https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md
-- llama.cpp Server: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
-- Hugging Face CLI: https://huggingface.co/docs/huggingface_hub/guides/cli
-- llamactl: https://github.com/lordmathis/llamactl
+- Apple M6 规格：https://support.apple.com/en-us/128108
+- Apple M4 Pro 规格：https://support.apple.com/en-us/121555
+- llama.cpp RPC：https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md
+- HF CLI：https://huggingface.co/docs/huggingface_hub/guides/cli
+- hf-mirror：https://hf-mirror.com/
+- aria2：https://aria2.github.io/manual/en/html/aria2c.html
+- llamactl：https://github.com/lordmathis/llamactl
