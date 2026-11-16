@@ -2,9 +2,18 @@
 # Both nodes: verified, resumable GGUF download from official HF or hf-mirror.com.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/common.sh"
-PYTHON="$AI_ROOT/.venv/bin/python"
-require_exec "$PYTHON"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Download-only use does not require cluster configuration or llama.cpp.
+if [[ -f "$ROOT/config/cluster.env" ]]; then source "$ROOT/config/cluster.env"; fi
+AI_ROOT="${AI_ROOT:-$HOME/AI}"
+PYTHON="${DOWNLOAD_PYTHON:-$ROOT/.venv-download/bin/python}"
+if [[ ! -x "$PYTHON" && -x "$AI_ROOT/.venv/bin/python" ]]; then
+  PYTHON="$AI_ROOT/.venv/bin/python"
+fi
+if [[ ! -x "$PYTHON" ]]; then
+  echo 'Run: bash scripts/setup-download.sh' >&2
+  exit 2
+fi
 if [[ "${1:-}" == verify ]]; then
   shift
   exec "$PYTHON" "$ROOT/scripts/hf_download.py" verify "$@" --root "$AI_ROOT/models"
@@ -14,5 +23,5 @@ source_set=0
 for ((i=0; i<${#args[@]}; i++)); do
   if [[ "${args[i]}" == --source ]]; then source_set=1; break; fi
 done
-if [[ $source_set -eq 0 ]]; then args+=(--source "${HF_SOURCE:-auto}"); fi
+if [[ $source_set -eq 0 ]]; then args+=(--source "${HF_SOURCE:-mirror}"); fi
 exec "$PYTHON" "$ROOT/scripts/hf_download.py" download "${args[@]}" --root "$AI_ROOT/models"

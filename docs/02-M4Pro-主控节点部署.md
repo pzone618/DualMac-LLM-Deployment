@@ -33,14 +33,14 @@ df -h "$HOME"
 
 1. 将雷电 5 线缆插入 **M4 Pro 后部 Thunderbolt 5 端口**，另一头插 M6 后部 Thunderbolt 4 端口。
 2. 打开 macOS **系统设置 → 网络 → Thunderbolt Bridge**。若未显示，可根据系统版本在网络设置中添加该服务。
-3. M4 的 IPv4 设为 **手动 10.77.0.1**，子网掩码 **255.255.255.0**；不要给这条点对点链路指定默认网关。
-4. M6 按其文档设为 **10.77.0.2 /24**。
+3. M4 的 IPv4 设为 **手动 192.168.100.1**，子网掩码 **255.255.255.0**；不要给这条点对点链路指定默认网关。
+4. M6 按其文档设为 **192.168.100.2 /24**。
 5. 检查地址：
 
 ```bash
 ifconfig | grep -A6 -E '^bridge[0-9]+:'
-ping -c 4 10.77.0.2
-route -n get 10.77.0.2
+ping -c 4 192.168.100.2
+route -n get 192.168.100.2
 ```
 
 `route -n get` 结果应使用 Thunderbolt Bridge 对应的接口，不要误走 Wi-Fi/VPN。若 `10.77.0.0/24` 已与现有网络冲突，**同时**修改两台网络配置和各自 `config/cluster.env`。
@@ -58,8 +58,8 @@ cat ~/.ssh/id_ed25519.pub
 把输出的公钥**追加**到 M6 上用户的 `~/.ssh/authorized_keys`。建议通过 M6 本机终端配置，完成后：
 
 ```bash
-ssh <M6的macOS用户名>@10.77.0.2 whoami
-ssh -o BatchMode=yes <M6的macOS用户名>@10.77.0.2 'uname -m'
+ssh <M6的macOS用户名>@192.168.100.2 whoami
+ssh -o BatchMode=yes <M6的macOS用户名>@192.168.100.2 'uname -m'
 ```
 
 第二条需无密码/弹窗地成功；否则 `cluster-mode.sh` 远程模式切换无法非交互执行。
@@ -75,8 +75,8 @@ nano config/cluster.env
 **必改项**（`your_m6_username` 是示例占位，必须换成 `whoami` 返回的真实用户名）：
 
 ```bash
-M4_IP=10.77.0.1
-M6_IP=10.77.0.2
+M4_IP=192.168.100.1
+M6_IP=192.168.100.2
 M6_USER=your_m6_username
 LLAMA_CPP_REF=master
 ```
@@ -178,14 +178,14 @@ cd ~/AI/dual-mac-cluster
 ./scripts/cluster-mode.sh local
 ./scripts/cluster-mode.sh status
 curl -i http://127.0.0.1:8081/health
-curl -i http://10.77.0.2:8082/health
+curl -i http://192.168.100.2:8082/health
 ```
 
 脚本将启动两个 tmux 会话：M4 `ai-m4-local`，M6 `ai-m6-local`。检查：
 
 ```bash
 tmux ls
-ssh <M6用户名>@10.77.0.2 'tmux ls'
+ssh <M6用户名>@192.168.100.2 'tmux ls'
 tail -n 80 ~/AI/logs/m4-local.log
 ```
 
@@ -203,9 +203,9 @@ curl -i http://127.0.0.1:8083/health
 如果失败：
 
 ```bash
-nc -G 2 -vz 10.77.0.2 50052
+nc -G 2 -vz 192.168.100.2 50052
 tail -n 120 ~/AI/logs/m4-distributed.log
-ssh <M6用户名>@10.77.0.2 'tail -n 120 ~/AI/logs/m6-rpc.log'
+ssh <M6用户名>@192.168.100.2 'tail -n 120 ~/AI/logs/m6-rpc.log'
 ```
 
 模式脚本检查两端 **Git commit 是否一致**；不一致就拒绝进入分布式模式。

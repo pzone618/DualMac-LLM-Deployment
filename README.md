@@ -2,6 +2,29 @@
 
 **日期：2026-11-16** · 中文部署资料 · 面向 **Mac mini M4 Pro 24GB + Mac mini M6 24GB + Thunderbolt 5 线缆**。
 
+## 仅准备模型下载（暂不部署双机）
+
+在本工程根目录执行，不需要集群配置、SSH 或 llama.cpp：
+
+```bash
+bash scripts/setup-download.sh
+# 已选定的四模型组合（含 Qwen3.5 视觉配套文件）：
+bash scripts/download-starter-models.sh
+# 模型确定后，将下面的仓库和文件名替换为真实值：
+bash scripts/download-model.sh OWNER/REPO --file MODEL.gguf --source mirror --revision FULL_COMMIT_SHA
+```
+
+下载环境位于工程 `.venv-download`；默认模型目录为 `~/AI/models`，可以通过
+`AI_ROOT=/磁盘路径/AI bash scripts/download-model.sh ...` 调整。无配置时默认使用镜像；
+已有 `cluster.env` 的 `HF_SOURCE` 仍会生效，显式 `--source mirror` 可覆盖。
+只支持 GGUF，视觉配套文件和其他格式尚未纳入此入口。
+
+首次可省略 `--revision`；保存日志中的 40 位 pinned SHA，后续续传使用该 SHA。
+中断后重跑同一命令，保留模型文件、`.aria2` 和隐藏的 `.source.json`。
+进度每 10 秒保存一次；服务器不支持续传时终止，不自动清空文件重下。
+四模型脚本将各仓库固定版本保存于 `.download-state/`，续传时也需保留该目录。
+完成后自动验证大小和上游 SHA256（如有）。更多边界见下载手册。
+
 ## 包含内容
 
 - `docs/01-总体方案.md`：角色与网络、需求、架构、切换方式、安全与验收
@@ -63,7 +86,7 @@ cd ~/AI/dual-mac-cluster
 ./scripts/cluster-mode.sh stop
 ```
 
-独立 HTTP: M4 `127.0.0.1:8081`，M6 `10.77.0.2:8082`。分布式 HTTP: M4 `127.0.0.1:8083`。RPC: M6 `10.77.0.2:50052`。IP/端口可在 `config/cluster.env` 调整。
+独立 HTTP: M4 `127.0.0.1:8081`，M6 `192.168.100.2:8082`。分布式 HTTP: M4 `127.0.0.1:8083`。RPC: M6 `192.168.100.2:50052`。IP/端口可在 `config/cluster.env` 调整。
 
 **验证边界**：脚本已经过语法检查和核心逻辑单元测试，但**没有在两台实体 Mac 的 Apple Metal、Thunderbolt、RPC 环境中运行端到端测试**。先用 1B 模型逐步验收，再测试更大型模型。llamactl/Open WebUI 仍是可选的第二阶段手动集成，不宣称一键配置 Web Dashboard。
 

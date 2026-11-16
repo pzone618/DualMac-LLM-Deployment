@@ -212,11 +212,11 @@ def download_aria2(repo: str, filename: str, revision: str, path: Path, endpoint
     from huggingface_hub import hf_hub_url
     url = hf_hub_url(repo_id=repo, filename=filename, revision=revision, endpoint=endpoint)
     cmd = [
-        "aria2c", "--continue=true", "--always-resume=true",
+        "aria2c", "--continue=true", "--always-resume=true", "--auto-save-interval=10",
         "--auto-file-renaming=false", "--allow-overwrite=false",
         "--file-allocation=none", "--max-tries=5", "--retry-wait=10",
         "--connect-timeout=30", "--timeout=120", "--split=1",
-        "--max-connection-per-server=1", "--max-redirect=5",
+        "--max-connection-per-server=1",
         f"--dir={path.parent}", f"--out={path.name}", url,
     ]
     print(f"[aria2] {endpoint} {repo}@{revision[:12]} -> {filename}", flush=True)

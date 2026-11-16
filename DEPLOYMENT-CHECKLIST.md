@@ -4,8 +4,8 @@
 
 - [ ] 确认 Apple Silicon / macOS / Thunderbolt 端口 / 磁盘空间
 - [ ] 使用 TB 线缆连接两台 Mac；创建 Thunderbolt Bridge
-- [ ] M4 Pro = 10.77.0.1/24，M6 = 10.77.0.2/24（若已有网络冲突，一起修改）
-- [ ] 路由 `route -n get 10.77.0.2` 经过 Thunderbolt Bridge
+- [ ] M4 Pro = 192.168.100.1/24，M6 = 192.168.100.2/24（若已有网络冲突，一起修改）
+- [ ] 路由 `route -n get 192.168.100.2` 经过 Thunderbolt Bridge
 - [ ] 两台都解压到 `~/AI/dual-mac-cluster`
 - [ ] 分别复制并设置 `config/cluster.env`
 - [ ] M6 开启 Remote Login；M4 设置 SSH 公钥
