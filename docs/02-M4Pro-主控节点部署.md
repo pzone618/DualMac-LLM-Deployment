@@ -90,7 +90,7 @@ LLAMA_CPP_REF=master
 ```bash
 cd ~/AI/dual-mac-cluster
 xcode-select -p || xcode-select --install
-./scripts/bootstrap.sh
+./scripts/common/bootstrap.sh
 ```
 
 此脚本将使用 brew 安装 CMake、Git、tmux、Python；源码位置 `~/AI/llama.cpp`；CMake 参数为 `-DGGML_METAL=ON -DGGML_RPC=ON`；在 `~/AI/.venv` 安装 `huggingface_hub`。
@@ -108,7 +108,7 @@ git -C ~/AI/llama.cpp rev-parse HEAD
 LLAMA_CPP_REF=PASTE_FULL_GIT_SHA_HERE
 ```
 
-然后 **M6 按其手册用完全相同 SHA 编译**。M4 若已在该 SHA，通常无需再次重新编译；想保证环境一致也可重跑 `./scripts/bootstrap.sh`。
+然后 **M6 按其手册用完全相同 SHA 编译**。M4 若已在该 SHA，通常无需再次重新编译；想保证环境一致也可重跑 `./scripts/common/bootstrap.sh`。
 
 ## 5. 下载测试模型（M4）
 
@@ -138,9 +138,9 @@ cd ~/AI/dual-mac-cluster
 M6 bootstrap/SSH 配置完成后，可在 M4 统一下载：
 
 ```bash
-./scripts/model-manager.sh download m6 ggml-org/gemma-3-1b-it-GGUF \
+./scripts/legacy/model-manager.sh download m6 ggml-org/gemma-3-1b-it-GGUF \
   --file gemma-3-1b-it-Q4_K_M.gguf --source mirror
-./scripts/model-manager.sh inventory
+./scripts/legacy/model-manager.sh inventory
 ```
 
 分片模型使用 `--pattern` 下载匹配的全部分片。私有/需申请许可的模型只能使用 `--source official --engine hf`。完整示例与切换源站的安全机制详见 [`04-模型下载与镜像切换.md`](04-模型下载与镜像切换.md)。
@@ -149,7 +149,7 @@ M6 bootstrap/SSH 配置完成后，可在 M4 统一下载：
 
 ```bash
 cd ~/AI/dual-mac-cluster
-./scripts/run-m4-local.sh
+./scripts/legacy/run-m4-local.sh
 ```
 
 打开另一个 Terminal：
@@ -175,8 +175,8 @@ curl -s http://127.0.0.1:8081/v1/chat/completions \
 
 ```bash
 cd ~/AI/dual-mac-cluster
-./scripts/cluster-mode.sh local
-./scripts/cluster-mode.sh status
+./scripts/legacy/cluster-mode.sh local
+./scripts/legacy/cluster-mode.sh status
 curl -i http://127.0.0.1:8081/health
 curl -i http://192.168.100.2:8082/health
 ```
@@ -195,8 +195,8 @@ tail -n 80 ~/AI/logs/m4-local.log
 
 ```bash
 cd ~/AI/dual-mac-cluster
-./scripts/cluster-mode.sh distributed
-./scripts/cluster-mode.sh status
+./scripts/legacy/cluster-mode.sh distributed
+./scripts/legacy/cluster-mode.sh status
 curl -i http://127.0.0.1:8083/health
 ```
 
@@ -224,11 +224,11 @@ curl -s http://127.0.0.1:8083/v1/chat/completions \
 
 ```bash
 cd ~/AI/dual-mac-cluster
-./scripts/cluster-mode.sh local          # 两台独立运行
-./scripts/cluster-mode.sh distributed    # M4 + M6 RPC
-./scripts/cluster-mode.sh status         # 显示 tmux、健康状态
-./scripts/cluster-mode.sh stop           # 停止本包管理的模式服务
-./scripts/model-manager.sh inventory     # 查看双机模型文件
+./scripts/legacy/cluster-mode.sh local          # 两台独立运行
+./scripts/legacy/cluster-mode.sh distributed    # M4 + M6 RPC
+./scripts/legacy/cluster-mode.sh status         # 显示 tmux、健康状态
+./scripts/legacy/cluster-mode.sh stop           # 停止本包管理的模式服务
+./scripts/legacy/model-manager.sh inventory     # 查看双机模型文件
 ```
 
 **启动新模式不会删除模型文件。** 同一机器同一时间只选择一种主模式，避免 24GB 内存压力变大。

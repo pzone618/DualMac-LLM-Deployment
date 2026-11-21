@@ -10,7 +10,7 @@
 - [ ] 分别复制并设置 `config/cluster.env`
 - [ ] M6 开启 Remote Login；M4 设置 SSH 公钥
 - [ ] M4 可通过 SSH 非交互登录 M6
-- [ ] 两台完成 `./scripts/bootstrap.sh`
+- [ ] 两台完成 `./scripts/common/bootstrap.sh`
 - [ ] 记录 M4 编译 SHA，并在两台一致固定 `LLAMA_CPP_REF`
 
 ## Hugging Face 下载与镜像
@@ -25,11 +25,11 @@
 
 ## 推理验收
 
-- [ ] `./scripts/cluster-mode.sh local`，M4 :8081 和 M6 :8082 的 `/health` 正常
+- [ ] `./scripts/legacy/cluster-mode.sh local`，M4 :8081 和 M6 :8082 的 `/health` 正常
 - [ ] 两个独立 API 均实际完成 chat 请求
-- [ ] `./scripts/cluster-mode.sh distributed` 后 M6 :50052 RPC 可连接
+- [ ] `./scripts/legacy/cluster-mode.sh distributed` 后 M6 :50052 RPC 可连接
 - [ ] M4 :8083 实际推理成功，日志证明远端设备参与
-- [ ] 测试 `./scripts/cluster-mode.sh stop` 可停止本包的推理会话
+- [ ] 测试 `./scripts/legacy/cluster-mode.sh stop` 可停止本包的推理会话
 - [ ] 记录双机内存使用、加载时间、TTFT 和 tokens/s
 
 ### 安全边界

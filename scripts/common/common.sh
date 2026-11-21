@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 CONF="$ROOT/config/cluster.env"
 if [ ! -f "$CONF" ]; then

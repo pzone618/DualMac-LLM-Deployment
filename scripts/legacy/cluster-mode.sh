@@ -1,19 +1,19 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/common.sh"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/common/common.sh"
 REMOTE="${M6_USER}@${M6_IP}"
 if [ "$M6_USER" = CHANGE_ME ] || [ -z "$M6_USER" ]; then
   echo 'ERROR: edit M6_USER in config/cluster.env first.' >&2; exit 2
 fi
-ssh_m6() { ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "bash \"$M6_AI_ROOT/dual-mac-cluster/scripts/m6-service.sh\" $1"; }
+ssh_m6() { ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "bash \"$M6_AI_ROOT/dual-mac-cluster/scripts/legacy/m6-service.sh\" $1"; }
 stop_m4() {
   tmux kill-session -t ai-m4-local 2>/dev/null || true
   tmux kill-session -t ai-m4-distributed 2>/dev/null || true
 }
 start_m4() {
   local session="$1" script="$2" log="$3"
-  tmux new-session -d -s "$session" "exec '$ROOT/scripts/$script' >> '$LOG_DIR/$log' 2>&1"
+  tmux new-session -d -s "$session" "exec '$ROOT/scripts/legacy/$script' >> '$LOG_DIR/$log' 2>&1"
   echo "Started $session (log: $LOG_DIR/$log)"
 }
 check_same_commit() {
@@ -47,7 +47,7 @@ case "${1:-}" in
       echo "ERROR: RPC worker not reachable at $M6_IP:$RPC_PORT; see M6 logs" >&2
       exit 4
     fi
-    start_m4 ai-m4-distributed run-m4-distributed.sh m4-distributed.log
+    start_m4 ai-m4-distributed ../master/run-distributed.sh m4-distributed.log
     echo "Mode: distributed. API http://127.0.0.1:$DISTRIBUTED_PORT/v1"
     ;;
   stop) stop_m4; ssh_m6 stop ;;

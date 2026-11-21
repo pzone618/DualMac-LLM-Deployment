@@ -1,8 +1,8 @@
 #!/bin/bash
 # Central model actions from M4. Source switching: --source official|mirror|auto.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/common.sh"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/common/common.sh"
 REMOTE="${M6_USER}@${M6_IP}"
 PYTHON="$AI_ROOT/.venv/bin/python"
 require_exec "$PYTHON"

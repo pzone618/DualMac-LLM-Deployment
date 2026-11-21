@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/common.sh"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/common/common.sh"
 model="$(model_path "$MODEL_REPO" "$MODEL_FILE")"
 require_file "$model"
 require_exec "$BIN/llama-server"

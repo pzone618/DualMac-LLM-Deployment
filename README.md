@@ -62,16 +62,16 @@ nano config/cluster.env
 cd ~/AI/dual-mac-cluster
 
 # 自动：先 official，失败再 hf-mirror.com
-./scripts/model-manager.sh download both ggml-org/gemma-3-1b-it-GGUF \
+./scripts/legacy/model-manager.sh download both ggml-org/gemma-3-1b-it-GGUF \
   --file gemma-3-1b-it-Q4_K_M.gguf --source auto
 
 # 如果官方站慢/不可达，显式指定 hf-mirror.com
-./scripts/model-manager.sh download m4 ggml-org/gemma-3-1b-it-GGUF \
+./scripts/legacy/model-manager.sh download m4 ggml-org/gemma-3-1b-it-GGUF \
   --file gemma-3-1b-it-Q4_K_M.gguf --source mirror
 
 # 恢复下载：重跑相同命令即可（aria2 源站须支持 Range）
 # 下载后检验：
-./scripts/model-manager.sh verify both ggml-org/gemma-3-1b-it-GGUF \
+./scripts/legacy/model-manager.sh verify both ggml-org/gemma-3-1b-it-GGUF \
   gemma-3-1b-it-Q4_K_M.gguf
 ```
 
@@ -86,14 +86,14 @@ llama.cpp 两边必须是同一个 commit；用 GitHub zip 时解压到 `~/AI/ll
 
 | 步骤 | 主节点（M4 Pro） | 子节点（M6） |
 |---|---|---|
-| 安装编译 | `scripts/master.sh setup` | `scripts/worker.sh setup` |
+| 安装编译 | `scripts/master/master.sh setup` | `scripts/worker/worker.sh setup` |
 | 模型 | 在 `MODELS_DIR` 放分布式 GGUF（只需主节点有） | 不需要模型文件 |
-| 启动 | **后**启动：`scripts/master.sh start` | **先**启动：`scripts/worker.sh start` |
-| 状态/日志 | `master.sh status` / `master.sh logs` | `worker.sh status` / `worker.sh logs` |
-| 停止 | `scripts/master.sh stop` | `scripts/worker.sh stop` |
+| 启动 | **后**启动：`scripts/master/master.sh start` | **先**启动：`scripts/worker/worker.sh start` |
+| 状态/日志 | `scripts/master/master.sh status|logs` | `scripts/worker/worker.sh status|logs` |
+| 停止 | `scripts/master/master.sh stop` | `scripts/worker/worker.sh stop` |
 
 主节点 API：`http://127.0.0.1:8083/v1`，子节点 RPC：`M6_IP:50052`（仅限 Thunderbolt 桥接网段，勿暴露到局域网）。
-`master.sh start` 会先检查子节点端口，未就绪则报错。`cluster-mode.sh`（经 SSH 一键切换，含独立模式）仍可选用。
+`master.sh start` 会先检查子节点端口，未就绪则报错。`scripts/legacy/cluster-mode.sh`（经 SSH 一键切换，含独立模式）仍可选用。
 
 **验证边界**：脚本已经过语法检查和核心逻辑单元测试，但**没有在两台实体 Mac 的 Apple Metal、Thunderbolt、RPC 环境中运行端到端测试**。先用 1B 模型逐步验收，再测试更大型模型。llamactl/Open WebUI 仍是可选的第二阶段手动集成，不宣称一键配置 Web Dashboard。
 
@@ -106,3 +106,14 @@ llama.cpp 两边必须是同一个 commit；用 GitHub zip 时解压到 `~/AI/ll
 - hf-mirror：https://hf-mirror.com/
 - aria2：https://aria2.github.io/manual/en/html/aria2c.html
 - llamactl：https://github.com/lordmathis/llamactl
+
+## 脚本目录结构
+
+```
+scripts/
+  master/   主节点专用：master.sh（setup/start/stop/status/logs）、run-distributed.sh
+  worker/   子节点专用：worker.sh（setup/start/stop/status/logs）、run-rpc.sh
+  common/   两边共用：common.sh（读取 config/cluster.env）、bootstrap.sh（安装与编译）
+  legacy/   旧的 SSH 一键切换与独立模式脚本、model-manager.sh（可选，暂不维护）
+  download-*.sh / setup-download.sh / hf_download.py   模型下载（两边共用，只需主节点有模型）
+```

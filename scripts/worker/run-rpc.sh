@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/common.sh"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/common/common.sh"
 require_exec "$BIN/ggml-rpc-server"
 # TB4/TB5 mixed pairing: intentionally TCP only; see Apple TN3205.
 export GGML_RPC_NO_RDMA=1
