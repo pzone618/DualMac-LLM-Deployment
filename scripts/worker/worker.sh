@@ -27,7 +27,19 @@ case "${1:-}" in
     echo "Worker RPC listening on $M6_IP:$RPC_PORT"
     echo "llama.cpp commit: $(llama_commit)   (must equal the master's)"
     ;;
-  stop) tmux kill-session -t "$SESSION" 2>/dev/null || true; echo 'Worker stopped' ;;
+  stop)
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    # tmux may leave the child alive briefly; wait for the port to close, then force.
+    for _ in 1 2 3 4 5; do
+      nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1 || break; sleep 1
+    done
+    if nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1; then
+      pkill -f "ggml-rpc-server -H $M6_IP -p $RPC_PORT" 2>/dev/null || true; sleep 1
+    fi
+    if nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1; then
+      echo "ERROR: port $RPC_PORT still open after stop" >&2; exit 5
+    fi
+    echo 'Worker stopped (restart the master too: its RPC connection is gone)' ;;
   status)
     if running; then echo "Worker: running ($SESSION)"; else echo 'Worker: stopped'; fi
     nc -G 2 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1 && echo "RPC port $M6_IP:$RPC_PORT: open" || echo "RPC port $M6_IP:$RPC_PORT: closed"

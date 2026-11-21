@@ -25,7 +25,15 @@ case "${1:-}" in
     echo "llama.cpp commit: $(llama_commit)   (must equal the worker's)"
     echo "API: http://127.0.0.1:$DISTRIBUTED_PORT/v1   health: /health"
     ;;
-  stop) tmux kill-session -t "$SESSION" 2>/dev/null || true; echo 'Master stopped' ;;
+  stop)
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do
+      nc -G 1 -z 127.0.0.1 "$DISTRIBUTED_PORT" >/dev/null 2>&1 || break; sleep 1
+    done
+    if nc -G 1 -z 127.0.0.1 "$DISTRIBUTED_PORT" >/dev/null 2>&1; then
+      pkill -f "llama-server .*--port $DISTRIBUTED_PORT" 2>/dev/null || true; sleep 1
+    fi
+    echo 'Master stopped' ;;
   status)
     if running; then echo "Master: running ($SESSION)"; else echo 'Master: stopped'; fi
     nc -G 2 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1 && echo "Worker RPC $M6_IP:$RPC_PORT: reachable" || echo "Worker RPC $M6_IP:$RPC_PORT: NOT reachable"
