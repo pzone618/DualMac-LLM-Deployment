@@ -75,5 +75,9 @@ CMakeFiles/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Source archives (llama.cpp zip is unpacked to ~/AI/llama.cpp, never committed)
 *.zip
-llama.cpp-master.zip
+*.tgz
+*.tar.gz
+*.bundle
