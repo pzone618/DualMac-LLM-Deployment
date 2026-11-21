@@ -98,7 +98,7 @@ class Tests(unittest.TestCase):
             with patch.object(hf, "download_aria2", side_effect=fake_aria2):
                 hf.download_one(args, "owner/repo", "x.gguf", info, hf.OFFICIAL)
             self.assertEqual(attempts, [hf.OFFICIAL, hf.MIRROR])
-            manifest = json.loads(hf.manifest_path(Path(temp)/"owner__repo"/"x.gguf").read_text())
+            manifest = json.loads(hf.manifest_path(Path(temp)/"owner"/"repo"/"x.gguf").read_text())
             self.assertEqual(manifest["verification"], "upstream_sha256")
             self.assertEqual(manifest["download_endpoint"], hf.MIRROR)
 

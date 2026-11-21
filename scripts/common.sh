@@ -9,14 +9,22 @@ if [ ! -f "$CONF" ]; then
 fi
 # shellcheck disable=SC1090
 source "$CONF"
-AI_ROOT="$HOME/AI"
+# Overridable from config/cluster.env or the environment; default ~/AI.
+AI_ROOT="${AI_ROOT:-$HOME/AI}"
+# M6 paths are expanded by the remote shell, so $HOME stays literal here.
+M6_AI_ROOT="${M6_AI_ROOT:-\$HOME/AI}"
+M6_MODELS_DIR="${M6_MODELS_DIR:-$M6_AI_ROOT/models}"
+MODELS_DIR="${MODELS_DIR:-$AI_ROOT/models}"
 LLAMA_ROOT="$AI_ROOT/llama.cpp"
 BIN="$LLAMA_ROOT/build/bin"
 LOG_DIR="$AI_ROOT/logs"
-mkdir -p "$AI_ROOT/models" "$LOG_DIR"
+if [[ "$MODELS_DIR" == /Volumes/* && ! -d "/Volumes/$(echo "${MODELS_DIR#/Volumes/}" | cut -d/ -f1)" ]]; then
+  echo "ERROR: external disk for MODELS_DIR=$MODELS_DIR is not mounted." >&2; exit 1
+fi
+mkdir -p "$MODELS_DIR" "$LOG_DIR"
 model_path() {
   local repo="$1" file="$2"
-  printf '%s/models/%s/%s\n' "$AI_ROOT" "${repo//\//__}" "$file"
+  printf '%s/%s/%s\n' "$MODELS_DIR" "$repo" "$file"
 }
 require_file() {
   if [ ! -f "$1" ]; then
@@ -27,4 +35,8 @@ require_file() {
 }
 require_exec() {
   if [ ! -x "$1" ]; then echo "ERROR: missing executable $1. Run bootstrap.sh." >&2; exit 2; fi
+}
+# Commit of the llama.cpp source: git checkout, or .commit file for a GitHub zip unpack.
+llama_commit() {
+  if [[ -d "$LLAMA_ROOT/.git" ]]; then git -C "$LLAMA_ROOT" rev-parse HEAD; else cat "$LLAMA_ROOT/.commit"; fi
 }

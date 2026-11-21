@@ -6,7 +6,7 @@ REMOTE="${M6_USER}@${M6_IP}"
 if [ "$M6_USER" = CHANGE_ME ] || [ -z "$M6_USER" ]; then
   echo 'ERROR: edit M6_USER in config/cluster.env first.' >&2; exit 2
 fi
-ssh_m6() { ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "bash ~/AI/dual-mac-cluster/scripts/m6-service.sh $1"; }
+ssh_m6() { ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "bash \"$M6_AI_ROOT/dual-mac-cluster/scripts/m6-service.sh\" $1"; }
 stop_m4() {
   tmux kill-session -t ai-m4-local 2>/dev/null || true
   tmux kill-session -t ai-m4-distributed 2>/dev/null || true
@@ -18,8 +18,8 @@ start_m4() {
 }
 check_same_commit() {
   local local_commit remote_commit
-  local_commit="$(git -C "$LLAMA_ROOT" rev-parse HEAD)"
-  remote_commit="$(ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" 'git -C ~/AI/llama.cpp rev-parse HEAD')"
+  local_commit="$(llama_commit)"
+  remote_commit="$(ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "r=\"$M6_AI_ROOT/llama.cpp\"; if [ -d \"\$r/.git\" ]; then git -C \"\$r\" rev-parse HEAD; else cat \"\$r/.commit\"; fi")"
   if [ "$local_commit" != "$remote_commit" ]; then
     echo "RPC build commits differ! M4=$local_commit M6=$remote_commit" >&2
     exit 3

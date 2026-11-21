@@ -43,3 +43,37 @@ htmlcov/
 *.log
 *.pid
 /docs/*-integrity-audit.json
+
+# llama.cpp checkout and build output (cloned under ~/AI, guard against in-repo copies)
+/llama.cpp/
+/build/
+*.o
+*.a
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+
+# Hidden per-model source manifests and download leftovers
+.*.source.json
+*.aria2.tmp
+*.downloading
+*.gguf.*
+/.hf-cache/
+.huggingface/
+
+# Machine-specific: external disk model dirs and cluster state
+/AI/
+/Volumes/
+/config/cluster.env.local
+/config/*.local
+*.bak
+*.orig
+
+# Local tool settings (keep shared project settings if any)
+/.claude/settings.local.json
+/.claude/projects/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.zip
+llama.cpp-master.zip

@@ -232,7 +232,7 @@ def download_hf(repo: str, filename: str, revision: str, root: Path, endpoint: s
 
 def download_one(args, repo: str, filename: str, info, metadata_endpoint: str):
     selected = upstream_metadata(info, filename, args.sha256)
-    model_base = args.root.expanduser().resolve() / repo.replace("/", "__")
+    model_base = args.root.expanduser().resolve() / repo
     path = model_base / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     data = prepare(path, selected)
@@ -297,7 +297,7 @@ def cmd_download(args):
 def cmd_verify(args):
     clean_repo(args.repo)
     clean_filename(args.file)
-    path = args.root.expanduser().resolve() / args.repo.replace("/", "__") / args.file
+    path = args.root.expanduser().resolve() / args.repo / args.file
     manifest_file = manifest_path(path)
     if not manifest_file.is_file():
         die(f"Missing metadata: {manifest_file}; download with this package first")

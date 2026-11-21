@@ -30,7 +30,7 @@ check_ssh() {
 # allowing $HOME expansion without fragile tilde expansion.
 remote_script() {
   check_ssh
-  local script="$1" quoted arg command="bash \"\$HOME/AI/dual-mac-cluster/scripts/$1\""
+  local script="$1" quoted arg command="bash \"$M6_AI_ROOT/dual-mac-cluster/scripts/$1\""
   shift
   for arg in "$@"; do
     printf -v quoted '%q' "$arg"
@@ -94,7 +94,7 @@ case "$cmd" in
     repo="$2" file="$3"
     valid_repo "$repo" && valid_file "$file" || usage
     check_ssh
-    model_dir="$AI_ROOT/models/${repo//\//__}"
+    model_dir="$MODELS_DIR/${repo}"
     local_file="$model_dir/$file"
     local_meta="$model_dir/.$file.source.json"
     "$ROOT/scripts/download-model.sh" verify "$repo" "$file"
@@ -102,18 +102,19 @@ case "$cmd" in
     command -v rsync >/dev/null || { echo 'brew install rsync first' >&2; exit 2; }
     # rsync --append-verify keeps partial bytes and verifies all bytes before success.
     # SHA256 is checked again on the destination after transfer.
-    remote_shell "mkdir -p \"\$HOME/AI/models/${repo//\//__}\""
+    m6_models="$(remote_shell "echo \"$M6_MODELS_DIR\"")"
+    remote_shell "mkdir -p \"$m6_models/${repo}\""
     echo '[sync] verified M4 -> M6 (partial transfer resumable)'
     rsync -av --progress --partial --append-verify \
       --rsync-path=/opt/homebrew/bin/rsync \
-      "$local_file" "$local_meta" "${REMOTE}:AI/models/${repo//\//__}/"
+      "$local_file" "$local_meta" "${REMOTE}:${m6_models}/${repo}/"
     remote_script download-model.sh verify "$repo" "$file"
     ;;
   inventory)
     echo '[M4] GGUF files:'
-    find "$AI_ROOT/models" -type f -name '*.gguf' -print 2>/dev/null | sort
+    find "$MODELS_DIR" -type f -name '*.gguf' -print 2>/dev/null | sort
     echo '[M6] GGUF files:'
-    remote_shell 'find "$HOME/AI/models" -type f -name "*.gguf" -print' || true
+    remote_shell "find \"$M6_MODELS_DIR\" -type f -name '*.gguf' -print" || true
     ;;
   *) usage ;;
 esac
