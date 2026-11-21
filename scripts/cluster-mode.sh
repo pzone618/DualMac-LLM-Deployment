@@ -19,7 +19,7 @@ start_m4() {
 check_same_commit() {
   local local_commit remote_commit
   local_commit="$(llama_commit)"
-  remote_commit="$(ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "r=\"$M6_AI_ROOT/llama.cpp\"; if [ -d \"\$r/.git\" ]; then git -C \"\$r\" rev-parse HEAD; else cat \"\$r/.commit\"; fi")"
+  remote_commit="$(ssh -o BatchMode=yes -o ConnectTimeout=6 "$REMOTE" "r=\"$M6_AI_ROOT/llama.cpp\"; if [ -f \"\$r/.commit\" ]; then cat \"\$r/.commit\"; else git -C \"\$r\" rev-parse HEAD; fi")"
   if [ "$local_commit" != "$remote_commit" ]; then
     echo "RPC build commits differ! M4=$local_commit M6=$remote_commit" >&2
     exit 3

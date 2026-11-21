@@ -36,7 +36,7 @@ require_file() {
 require_exec() {
   if [ ! -x "$1" ]; then echo "ERROR: missing executable $1. Run bootstrap.sh." >&2; exit 2; fi
 }
-# Commit of the llama.cpp source: git checkout, or .commit file for a GitHub zip unpack.
+# Commit of the llama.cpp source: the .commit file wins (zip unpack or pinned), else git HEAD.
 llama_commit() {
-  if [[ -d "$LLAMA_ROOT/.git" ]]; then git -C "$LLAMA_ROOT" rev-parse HEAD; else cat "$LLAMA_ROOT/.commit"; fi
+  if [[ -f "$LLAMA_ROOT/.commit" ]]; then cat "$LLAMA_ROOT/.commit"; else git -C "$LLAMA_ROOT" rev-parse HEAD; fi
 }
