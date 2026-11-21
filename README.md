@@ -77,16 +77,23 @@ cd ~/AI/dual-mac-cluster
 
 配置文件中 `HF_SOURCE=auto|official|mirror` 定义默认模式；命令行 `--source` 可临时覆盖。**私有/gated 仓库必须用 `--source official --engine hf`**，镜像站不接收认证 Token。详见 [下载手册](docs/04-模型下载与镜像切换.md)。
 
-## 集群模式
+## 集群部署：主节点 / 子节点分别执行
 
-```bash
-./scripts/cluster-mode.sh local        # M4 / M6 各自独立推理
-./scripts/cluster-mode.sh distributed  # M4 llama-server + M6 RPC Worker
-./scripts/cluster-mode.sh status
-./scripts/cluster-mode.sh stop
-```
+两台 Mac 各自获取本工程（`git clone` 或拷贝到 `~/AI/dual-mac-cluster`），各自复制并编辑
+`config/cluster.env`（两边的 IP、端口、`LLAMA_CPP_REF` 必须一致）。**两台之间不需要 SSH。**
+llama.cpp 两边必须是同一个 commit；用 GitHub zip 时解压到 `~/AI/llama.cpp` 并写入
+`~/AI/llama.cpp/.commit`（zip 注释里的 commit，`unzip -z xxx.zip` 可见）。
 
-独立 HTTP: M4 `127.0.0.1:8081`，M6 `192.168.100.2:8082`。分布式 HTTP: M4 `127.0.0.1:8083`。RPC: M6 `192.168.100.2:50052`。IP/端口可在 `config/cluster.env` 调整。
+| 步骤 | 主节点（M4 Pro） | 子节点（M6） |
+|---|---|---|
+| 安装编译 | `scripts/master.sh setup` | `scripts/worker.sh setup` |
+| 模型 | 在 `MODELS_DIR` 放分布式 GGUF（只需主节点有） | 不需要模型文件 |
+| 启动 | **后**启动：`scripts/master.sh start` | **先**启动：`scripts/worker.sh start` |
+| 状态/日志 | `master.sh status` / `master.sh logs` | `worker.sh status` / `worker.sh logs` |
+| 停止 | `scripts/master.sh stop` | `scripts/worker.sh stop` |
+
+主节点 API：`http://127.0.0.1:8083/v1`，子节点 RPC：`M6_IP:50052`（仅限 Thunderbolt 桥接网段，勿暴露到局域网）。
+`master.sh start` 会先检查子节点端口，未就绪则报错。`cluster-mode.sh`（经 SSH 一键切换，含独立模式）仍可选用。
 
 **验证边界**：脚本已经过语法检查和核心逻辑单元测试，但**没有在两台实体 Mac 的 Apple Metal、Thunderbolt、RPC 环境中运行端到端测试**。先用 1B 模型逐步验收，再测试更大型模型。llamactl/Open WebUI 仍是可选的第二阶段手动集成，不宣称一键配置 Web Dashboard。
 
