@@ -17,7 +17,7 @@ bash scripts/download-model.sh OWNER/REPO --file MODEL.gguf --source mirror --re
 下载环境位于工程 `.venv-download`；默认模型目录为 `~/AI/models`，可以通过
 `AI_ROOT=/磁盘路径/AI bash scripts/download-model.sh ...` 调整。无配置时默认使用镜像；
 已有 `cluster.env` 的 `HF_SOURCE` 仍会生效，显式 `--source mirror` 可覆盖。
-只支持 GGUF，视觉配套文件和其他格式尚未纳入此入口。
+下载入口支持 GGUF，包括上述视觉模型配套的 mmproj GGUF 文件。
 
 首次可省略 `--revision`；保存日志中的 40 位 pinned SHA，后续续传使用该 SHA。
 中断后重跑同一命令，保留模型文件、`.aria2` 和隐藏的 `.source.json`。
@@ -63,20 +63,76 @@ cp config/cluster.env.example config/cluster.env && nano config/cluster.env
   脚本检测到 `.commit` 时直接使用该源码，不再联网，且 **`.commit` 优先于 git HEAD** 参与一致性比较。
 - zip 源码没有构建号，`setup` 已用 `-DLLAMA_USE_PREBUILT_UI=OFF` 避免下载不匹配的 Web UI 资源；`llama-server` 只提供 API。
 
-**3. 模型与启动**
+**3. 启动双机服务**
 
-| 步骤 | 主节点（M4 Pro） | 子节点（M6） |
-|---|---|---|
-| 安装编译 | `scripts/master/master.sh setup` | `scripts/worker/worker.sh setup` |
-| 模型 | `MODELS_DIR` 下放分布式 GGUF（**只需主节点有**） | 不需要模型文件 |
-| 启动 | **后**：`scripts/master/master.sh start` | **先**：`scripts/worker/worker.sh start` |
-| 状态/日志 | `master.sh status` / `master.sh logs` | `worker.sh status` / `worker.sh logs` |
-| 停止 | `master.sh stop` | `worker.sh stop` |
+首次部署时，先分别运行 M6 的 `scripts/worker/worker.sh setup` 和 M4 Pro 的 `scripts/master/master.sh setup`。以下命令均从各自的工程根目录执行。
 
-- 主节点 API：`http://127.0.0.1:8083/v1`（OpenAI 兼容），健康检查 `/health`；子节点 RPC：`M6_IP:50052`。
-- `master.sh start` 会检查模型文件和子节点端口，worker 未就绪时拒绝启动（返回码 4）。
-- **worker 重启后 master 必须重启**（RPC 为长连接，否则推理报 `Compute error`）。`stop` 会等端口真正关闭。
-- 启动后确认两边打印的 llama.cpp commit 相同。
+**先在 M6 启动 RPC worker**。所有模型共用这个服务，M6 只需配置桥接地址和 RPC 端口，模型文件放在 M4 Pro。
+
+```bash
+scripts/worker/worker.sh start
+scripts/worker/worker.sh status
+```
+
+**再在 M4 Pro 选择模型并启动 API**。例如，在主节点的 `config/cluster.env` 中设置以下三项。其他量化版本可直接复制实测表中的完整仓库名和文件名。[12 个模型的配置值与实测速度](docs/05-双机模型启停实测.md)
+
+```bash
+DISTRIBUTED_MODEL_REPO=ggml-org/gemma-4-31B-it-GGUF
+DISTRIBUTED_MODEL_FILE=gemma-4-31B-it-Q4_0.gguf
+CTX_SIZE=4096
+```
+
+```bash
+scripts/master/master.sh start
+scripts/master/master.sh status
+curl -fsS http://127.0.0.1:8083/health
+```
+
+核对两端打印的 llama.cpp commit。大模型加载需要时间，等 `/health` 返回 `status: ok` 后再发送请求。8083 是默认主节点 API 端口。查看日志分别运行 `scripts/master/master.sh logs` 和 `scripts/worker/worker.sh logs`。
+
+**换模型或停止**：先在 M4 Pro 运行 `scripts/master/master.sh stop`。换文本生成模型时，只需修改主节点的仓库和文件名，再启动 master，M6 worker 可以继续运行。整套关停时，最后在 M6 运行 `scripts/worker/worker.sh stop`。如果 worker 重启，也要重启 master 以重新建立 RPC 连接。
+
+### 各模型的启动参数怎么选
+
+文本生成模型共用上述流程。本轮统一使用 `-ngl 99 -c 4096`，由 llama.cpp 分配负载。这个配置是比较各模型的起点；最佳上下文长度和两机分配比例还需用目标任务分别测量。35B-A3B MTP Q8_0 在此配置下出现 M6 内存不足。
+
+两个文本嵌入模型在实测时额外使用了 `--embedding`。当前 `master.sh start` 使用文本生成参数。要复现实测，在主节点配置里选好嵌入模型，停止现有 master，保持 M6 worker 运行，再在 M4 Pro 前台执行：
+
+```bash
+bash -c '
+  source scripts/common/common.sh
+  export GGML_RPC_NO_RDMA=1
+  exec "$BIN/llama-server" -m "$(model_path "$DISTRIBUTED_MODEL_REPO" "$DISTRIBUTED_MODEL_FILE")" \
+    -ngl 99 -c "$CTX_SIZE" --rpc "$M6_IP:$RPC_PORT" --embedding \
+    --host 127.0.0.1 --port "$DISTRIBUTED_PORT"
+'
+```
+
+从另一终端发送嵌入请求，结束时在前台按 Ctrl-C：
+
+```bash
+curl -fsS http://127.0.0.1:8083/v1/embeddings -H 'Content-Type: application/json' \
+  -d '{"input":"双机检索测试","encoding_format":"float"}'
+```
+
+视觉模型的文本入口沿用文本生成命令。启用图像输入时，主节点还需用 `--mmproj` 加载与该模型匹配的视觉投影文件；本轮仅测试文本输入。[llama.cpp server 参数说明](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)
+
+低质量 PDF、EPUB 和图片的解析、模型分工及检索验收见[本地知识库建设方案](docs/06-本地知识库建设方案.md)。
+
+## 逐模型双机启停测试
+
+在主节点运行，需能通过 SSH 免交互登录 `M6_USER@M6_IP`，子节点的 RPC 程序位于
+`~/AI/llama.cpp/build/bin/`。测试使用独立进程，默认 API 端口为 8183，RPC 端口为 50152。
+运行时两台机器都需要为待测模型留出内存。
+
+```bash
+bash -c 'set -a; source config/cluster.env; set +a; exec python3 scripts/test-dual-models.py'
+```
+
+脚本扫描 `MODELS_DIR`，每个量化文件单独测试，分片模型从第一片启动。
+每轮启动 worker 和 master，等待健康检查，发起文本生成或嵌入请求，再停止两端并检查端口关闭。
+视觉模型只测文本入口，跳过 mmproj 配套文件、EAGLE3 草稿和隐藏文件。
+终端首行给出临时结果目录，内有每轮日志和 `results.jsonl`。任一模型失败时，脚本最终返回非零。
 
 ## 配置（`config/cluster.env`，两台各自一份，已被 git 忽略）
 

@@ -8,15 +8,18 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/common/common.sh"
 SESSION=ai-worker-rpc
 LOGFILE="$LOG_DIR/worker-rpc.log"
-running() { tmux has-session -t "$SESSION" 2>/dev/null; }
+running() { tmux has-session -t "=$SESSION" 2>/dev/null; }
 case "${1:-}" in
   setup) exec "$ROOT/scripts/common/bootstrap.sh" ;;
   start)
     command -v tmux >/dev/null || { echo 'tmux missing: run worker.sh setup' >&2; exit 1; }
     require_exec "$BIN/ggml-rpc-server"
     if running; then echo "Already running: $SESSION"; exit 0; fi
-    if ! ifconfig | grep -q "inet $M6_IP "; then
+    if ! ifconfig | awk -v ip="$M6_IP" '$1 == "inet" && $2 == ip { found=1 } END { exit !found }'; then
       echo "ERROR: M6_IP=$M6_IP is not an address of this Mac. Check config/cluster.env and the Thunderbolt Bridge." >&2; exit 2
+    fi
+    if nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1; then
+      echo "ERROR: port $RPC_PORT already in use" >&2; exit 4
     fi
     tmux new-session -d -s "$SESSION" "exec '$ROOT/scripts/worker/run-rpc.sh' >> '$LOGFILE' 2>&1"
     for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -28,17 +31,7 @@ case "${1:-}" in
     echo "llama.cpp commit: $(llama_commit)   (must equal the master's)"
     ;;
   stop)
-    tmux kill-session -t "$SESSION" 2>/dev/null || true
-    # tmux may leave the child alive briefly; wait for the port to close, then force.
-    for _ in 1 2 3 4 5; do
-      nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1 || break; sleep 1
-    done
-    if nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1; then
-      pkill -f "ggml-rpc-server -H $M6_IP -p $RPC_PORT" 2>/dev/null || true; sleep 1
-    fi
-    if nc -G 1 -z "$M6_IP" "$RPC_PORT" >/dev/null 2>&1; then
-      echo "ERROR: port $RPC_PORT still open after stop" >&2; exit 5
-    fi
+    stop_session "$SESSION" "$M6_IP" "$RPC_PORT"
     echo 'Worker stopped (restart the master too: its RPC connection is gone)' ;;
   status)
     if running; then echo "Worker: running ($SESSION)"; else echo 'Worker: stopped'; fi

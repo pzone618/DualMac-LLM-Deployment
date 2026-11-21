@@ -18,10 +18,30 @@ MODELS_DIR="${MODELS_DIR:-$AI_ROOT/models}"
 LLAMA_ROOT="$AI_ROOT/llama.cpp"
 BIN="$LLAMA_ROOT/build/bin"
 LOG_DIR="$AI_ROOT/logs"
-if [[ "$MODELS_DIR" == /Volumes/* && ! -d "/Volumes/$(echo "${MODELS_DIR#/Volumes/}" | cut -d/ -f1)" ]]; then
-  echo "ERROR: external disk for MODELS_DIR=$MODELS_DIR is not mounted." >&2; exit 1
+stop_session() {
+  local session="$1" host="$2" port="$3" attempt
+  command -v tmux >/dev/null || { echo "ERROR: tmux missing" >&2; return 2; }
+  if tmux has-session -t "=$session" 2>/dev/null; then
+    tmux kill-session -t "=$session" || return 1
+  fi
+  for attempt in 1 2 3 4 5; do
+    nc -G 1 -z "$host" "$port" >/dev/null 2>&1 || return 0
+    sleep 1
+  done
+  if nc -G 1 -z "$host" "$port" >/dev/null 2>&1; then
+    echo "ERROR: $host:$port is still in use. Inspect its owner with lsof -iTCP:$port." >&2
+    return 5
+  fi
+}
+if [[ "$LOG_DIR" == /Volumes/* ]]; then
+  volume="${LOG_DIR#/Volumes/}"
+  volume="/Volumes/${volume%%/*}"
+  if ! stat -f '%d' "$volume" >/dev/null 2>&1 || [[ "$(stat -f '%d' "$volume")" == "$(stat -f '%d' /Volumes)" ]]; then
+    echo "ERROR: volume for LOG_DIR is not mounted: $volume" >&2
+    exit 1
+  fi
 fi
-mkdir -p "$MODELS_DIR" "$LOG_DIR"
+mkdir -p "$LOG_DIR"
 model_path() {
   local repo="$1" file="$2"
   printf '%s/%s/%s\n' "$MODELS_DIR" "$repo" "$file"

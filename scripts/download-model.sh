@@ -22,7 +22,7 @@ fi
 args=("$@")
 source_set=0
 for ((i=0; i<${#args[@]}; i++)); do
-  if [[ "${args[i]}" == --source ]]; then source_set=1; break; fi
+  if [[ "${args[i]}" == --source || "${args[i]}" == --source=* ]]; then source_set=1; break; fi
 done
 if [[ $source_set -eq 0 ]]; then args+=(--source "${HF_SOURCE:-mirror}"); fi
 exec "$PYTHON" "$ROOT/scripts/hf_download.py" download "${args[@]}" --root "$MODELS_DIR"

@@ -5,7 +5,7 @@ source "$ROOT/scripts/common/common.sh"
 [[ "$(uname -s)" == Darwin && "$(uname -m)" == arm64 ]] || { echo 'ERROR: macOS Apple Silicon arm64 required' >&2; exit 1; }
 command -v brew >/dev/null 2>&1 || { echo 'Install Homebrew first: https://brew.sh/ (and reopen Terminal)' >&2; exit 1; }
 brew install cmake git tmux python aria2 rsync
-mkdir -p "$MODELS_DIR" "$LOG_DIR"
+mkdir -p "$AI_ROOT"
 if [[ -f "$LLAMA_ROOT/.commit" && ! -d "$LLAMA_ROOT/.git" ]]; then
   echo "Using unpacked llama.cpp source (zip), commit $(cat "$LLAMA_ROOT/.commit")"
 else

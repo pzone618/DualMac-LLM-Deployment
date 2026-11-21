@@ -28,6 +28,22 @@ class MockInfo:
         self.gated = False
 
 class Tests(unittest.TestCase):
+    def test_same_model_lock_rejects_overlap_and_allows_retry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "x.gguf"
+            with hf.model_lock(path):
+                with self.assertRaisesRegex(RuntimeError, "active"):
+                    with hf.model_lock(path):
+                        self.fail("overlapping operation acquired lock")
+            with hf.model_lock(path):
+                pass
+
+    def test_missing_external_volume_blocks_download(self):
+        root = Path("/Volumes/missing-test-volume/models")
+        with patch.object(Path, "is_mount", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "not mounted"):
+                hf.model_root(root)
+
     def test_endpoint_selection(self):
         self.assertEqual(hf.endpoints("auto"), [hf.OFFICIAL, hf.MIRROR])
         self.assertEqual(hf.endpoints("mirror"), [hf.MIRROR])

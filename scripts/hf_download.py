@@ -11,6 +11,8 @@ Requires huggingface_hub. For --engine aria2, also requires aria2c.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import fnmatch
 import hashlib
 import json
@@ -230,11 +232,36 @@ def download_hf(repo: str, filename: str, revision: str, root: Path, endpoint: s
                     local_dir=str(root), endpoint=endpoint, **auth_config(endpoint))
 
 
+def model_root(root: Path) -> Path:
+    root = root.expanduser().resolve()
+    if len(root.parts) >= 3 and root.parts[1] == "Volumes":
+        volume = Path(*root.parts[:3])
+        if not volume.is_mount():
+            die(f"Model volume is not mounted: {volume}")
+    return root
+
+
+@contextmanager
+def model_lock(path: Path):
+    # Keep the lock inode across runs so concurrent callers always lock the same file.
+    with path.with_name("." + path.name + ".lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            die(f"Another download or verification is active for {path}")
+        yield
+
+
 def download_one(args, repo: str, filename: str, info, metadata_endpoint: str):
-    selected = upstream_metadata(info, filename, args.sha256)
-    model_base = args.root.expanduser().resolve() / repo
+    model_base = model_root(args.root) / repo
     path = model_base / filename
     path.parent.mkdir(parents=True, exist_ok=True)
+    with model_lock(path):
+        download_locked(args, repo, filename, info, model_base, path)
+
+
+def download_locked(args, repo, filename, info, model_base, path):
+    selected = upstream_metadata(info, filename, args.sha256)
     data = prepare(path, selected)
     marker = partial_marker(path)
     if path.is_file() and not marker.exists():
@@ -297,15 +324,16 @@ def cmd_download(args):
 def cmd_verify(args):
     clean_repo(args.repo)
     clean_filename(args.file)
-    path = args.root.expanduser().resolve() / args.repo / args.file
+    path = model_root(args.root) / args.repo / args.file
     manifest_file = manifest_path(path)
     if not manifest_file.is_file():
         die(f"Missing metadata: {manifest_file}; download with this package first")
-    with manifest_file.open(encoding="utf-8") as handle:
-        data = json.load(handle)
-    if data.get("repo") != args.repo or data.get("filename") != args.file:
-        die("Metadata does not match requested repo/file")
-    result = verify_file(path, data)
+    with model_lock(path):
+        with manifest_file.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+        if data.get("repo") != args.repo or data.get("filename") != args.file:
+            die("Metadata does not match requested repo/file")
+        result = verify_file(path, data)
     print(f"[OK] {path} / {result['verification']} / SHA256={result['local_sha256']}")
 
 
