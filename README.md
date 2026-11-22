@@ -88,9 +88,34 @@ scripts/master/master.sh status
 curl -fsS http://127.0.0.1:8083/health
 ```
 
+**启动前需要指定模型吗？** 首次启动 master 前，在 M4 Pro 确认一次 `DISTRIBUTED_MODEL_REPO` 和 `DISTRIBUTED_MODEL_FILE`，并确认文件位于 `MODELS_DIR/<仓库>/<文件名>`。之后重启同一个模型只需运行启动命令，脚本会读取已保存的配置。M6 的 worker 和 SSH 隧道都无需指定模型。
+
 核对两端打印的 llama.cpp commit。大模型加载需要时间，等 `/health` 返回 `status: ok` 后再发送请求。8083 是默认主节点 API 端口。查看日志分别运行 `scripts/master/master.sh logs` 和 `scripts/worker/worker.sh logs`。
 
 **换模型或停止**：先在 M4 Pro 运行 `scripts/master/master.sh stop`。换文本生成模型时，只需修改主节点的仓库和文件名，再启动 master，M6 worker 可以继续运行。整套关停时，最后在 M6 运行 `scripts/worker/worker.sh stop`。如果 worker 重启，也要重启 master 以重新建立 RPC 连接。
+
+### 在 M6 通过 SSH 隧道调用 M4 的 API
+
+先按上文启动两端服务。M4 需开启 macOS「远程登录」，并允许 M6 上的用户通过 SSH 登录。下面以 M4 的桥接地址 `192.168.100.1` 和登录用户 `leonyu` 为例，请按实际配置替换。
+
+**在 M6 的第一个终端**建立隧道，并保持终端开启。此命令将 M6 的本地端口转发到 M4 的 API 端口。
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:8083:127.0.0.1:8083 \
+  leonyu@192.168.100.1
+```
+
+**在 M6 的第二个终端**检查模型是否就绪，并取得客户端需要的模型 ID。
+
+```bash
+curl -fsS http://127.0.0.1:8083/health
+curl -fsS http://127.0.0.1:8083/v1/models
+```
+
+健康状态为 `ok` 后，M6 的 OpenAI 兼容客户端将 **Base URL** 填为 `http://127.0.0.1:8083/v1`，**模型名**填写模型列表返回的 `data[0].id`。M4 切换模型后，重新查询该 ID 即可沿用原隧道。[llama.cpp 模型列表接口](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)
+
+如果 M6 的 8083 已被占用，把转发参数改为 `-L 127.0.0.1:18083:127.0.0.1:8083`，并把 M6 上的检查地址和客户端地址都改用 18083。若 M4 的 `DISTRIBUTED_PORT` 已改动，最后一个端口也要对应修改。用完在第一个终端按 Ctrl-C 关闭隧道，两端推理服务可继续运行。
 
 ### 各模型的启动参数怎么选
 
