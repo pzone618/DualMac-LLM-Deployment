@@ -42,6 +42,73 @@ M4 Pro（主节点）+ M6（子节点）已按本工程跑通分布式推理：*
 RPC 实验性、**无鉴权**：worker 只绑定 Thunderbolt 桥接地址（`M6_IP`），不要暴露到局域网或公网；
 `llama-server` 默认仅监听 `127.0.0.1`，且未设 API key。
 
+## 从零打通 M4 与 M6（完整流程）
+
+两台全新的 Mac 按下面顺序做。标 **[M4]** 只在主节点做，**[M6]** 只在子节点做，**[两台]** 各做一遍。其中 SSH 一步是可选的，运行分布式服务不依赖它。每一步的细节见后面的"快速开始"。
+
+**1. [两台] 基础软件**：macOS 在 Apple Silicon 上，装好 [Homebrew](https://brew.sh/)，再 `brew install node`（编译 Web UI 要用，`setup` 会装其余依赖）。
+
+**2. [两台] 连线并配置 Thunderbolt Bridge**：用 Thunderbolt 线连接两台。系统设置 → 网络 → Thunderbolt Bridge，IPv4 选"手动"，掩码 `255.255.255.0`，不填路由器和 DNS。也可以命令行设置：
+
+```bash
+sudo networksetup -setmanual "Thunderbolt Bridge" 192.168.100.1 255.255.255.0   # M4
+sudo networksetup -setmanual "Thunderbolt Bridge" 192.168.100.2 255.255.255.0   # M6
+```
+
+验证：M4 上 `ping -c 3 192.168.100.2`，M6 上 `ping -c 3 192.168.100.1`，都应通（延迟 1ms 内）。
+
+**3. [两台] 取得工程并写配置**：
+
+```bash
+git clone https://github.com/pzone618/DualMac-LLM-Deployment.git ~/AI/dual-mac-cluster
+cd ~/AI/dual-mac-cluster && cp config/cluster.env.example config/cluster.env
+```
+
+两边 `cluster.env` 的 `M4_IP`、`M6_IP`、`RPC_PORT` 必须一致。M4 额外设 `DISTRIBUTED_MODEL_REPO` / `_FILE`，必要时设 `MODELS_DIR`。
+
+**4. [两台] 同一版本的 llama.cpp 并编译**：先放好同一份源码（联网 clone，或用 zip 并写 `.commit`，见快速开始第 2 步），再各自编译：
+
+```bash
+scripts/master/master.sh setup     # M4
+scripts/worker/worker.sh setup     # M6
+```
+
+两边输出的 `llama.cpp commit` 必须相同。
+
+**5. [M4] 下载模型**：只有 M4 需要模型文件，M6 不需要。
+
+```bash
+scripts/download-model.sh ggml-org/gemma-4-31B-it-GGUF --file gemma-4-31B-it-Q4_0.gguf --source auto
+```
+
+**6. 先启动 M6，再启动 M4**：
+
+```bash
+scripts/worker/worker.sh start     # M6
+scripts/master/master.sh start     # M4，worker 不通时会返回 4 并拒绝启动
+```
+
+**7. [M4] 验证**：
+
+```bash
+scripts/master/master.sh status                 # Worker RPC ... reachable，Health ok
+curl -fsS http://127.0.0.1:8083/health          # 大模型要等几分钟，直到 status: ok
+curl -fsS http://127.0.0.1:8083/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"1+1=?"}],"max_tokens":256}'
+open http://127.0.0.1:8083/                     # Web UI
+```
+
+通过标准：M6 的内存占用明显上升（子节点约 10GB），推理返回结果，速度约 8 tok/s 是正常的（31B 模型）。
+
+**8. [可选] 配置 M4 到 M6 的免密 SSH**：只用于从 M4 远程查看或控制 M6（先开启 M6 的"远程登录"）。
+
+```bash
+ssh-copy-id <M6用户名>@192.168.100.2        # 在 M4 上，输入一次 M6 密码
+ssh <M6用户名>@192.168.100.2 'cd ~/AI/dual-mac-cluster && scripts/worker/worker.sh status'
+```
+
+**9. 关停顺序**：先 `master.sh stop`（M4），最后 `worker.sh stop`（M6）。worker 重启后，master 也必须重启。
+
 ## 快速开始（两台各自执行，互相不依赖 SSH）
 
 **1. 取得工程（两台都做）**
