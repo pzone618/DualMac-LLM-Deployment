@@ -20,7 +20,7 @@ else
     git -C "$LLAMA_ROOT" checkout --detach "$LLAMA_CPP_REF"
   fi
 fi
-cmake -S "$LLAMA_ROOT" -B "$LLAMA_ROOT/build" -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=ON -DGGML_RPC=ON -DLLAMA_USE_PREBUILT_UI=OFF
+cmake -S "$LLAMA_ROOT" -B "$LLAMA_ROOT/build" -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=ON -DGGML_RPC=ON -DLLAMA_BUILD_UI=ON -DLLAMA_USE_PREBUILT_UI=OFF
 cmake --build "$LLAMA_ROOT/build" --config Release -j 8
 [[ -d "$AI_ROOT/.venv" ]] || python3 -m venv "$AI_ROOT/.venv"
 "$AI_ROOT/.venv/bin/python" -m pip install --upgrade pip huggingface_hub

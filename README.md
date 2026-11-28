@@ -1,6 +1,6 @@
 # Dual Mac LLM Cluster｜双 Mac 本地 AI 集群 v1.2
 
-**更新：2026-11-21** · 中文部署资料 · 面向 **Mac mini M4 Pro 24GB + Mac mini M6 24GB + Thunderbolt 5 线缆**。
+**更新：2026-11-27** · 中文部署资料 · 面向 **Mac mini M4 Pro 24GB + Mac mini M6 24GB + Thunderbolt 5 线缆**。
 
 ## 仅准备模型下载（暂不部署双机）
 
@@ -61,7 +61,7 @@ cp config/cluster.env.example config/cluster.env && nano config/cluster.env
 - 网络慢：下载 GitHub 的 `llama.cpp-master.zip`，解压为 `~/AI/llama.cpp`，并把 zip 注释里的 commit
   写入 `~/AI/llama.cpp/.commit`（`unzip -z llama.cpp-master.zip` 可见），再运行 `setup` 编译。
   脚本检测到 `.commit` 时直接使用该源码，不再联网，且 **`.commit` 优先于 git HEAD** 参与一致性比较。
-- zip 源码没有构建号，`setup` 已用 `-DLLAMA_USE_PREBUILT_UI=OFF` 避免下载不匹配的 Web UI 资源；`llama-server` 只提供 API。
+- `setup` 用 `-DLLAMA_BUILD_UI=ON -DLLAMA_USE_PREBUILT_UI=OFF` 在本机用 npm 构建并嵌入 Web UI（需要 Node/npm，`brew install node`），不下载预编译资源（zip 源码没有构建号，预编译资源会不匹配）。启动后浏览器打开 `http://127.0.0.1:8083/`（单机为 8081）即可聊天；API 在 `/v1`。
 
 **3. 启动双机服务**
 
@@ -93,6 +93,18 @@ curl -fsS http://127.0.0.1:8083/health
 核对两端打印的 llama.cpp commit。大模型加载需要时间，等 `/health` 返回 `status: ok` 后再发送请求。8083 是默认主节点 API 端口。查看日志分别运行 `scripts/master/master.sh logs` 和 `scripts/worker/worker.sh logs`。
 
 **换模型或停止**：先在 M4 Pro 运行 `scripts/master/master.sh stop`。换文本生成模型时，只需修改主节点的仓库和文件名，再启动 master，M6 worker 可以继续运行。整套关停时，最后在 M6 运行 `scripts/worker/worker.sh stop`。如果 worker 重启，也要重启 master 以重新建立 RPC 连接。
+
+### 单机启动（仅 M4，不需要 M6）
+
+模型能放进 M4 时，单机更快（8B 级约 40+ tok/s）。在主节点 `cluster.env` 设 `MODEL_REPO` / `MODEL_FILE`，并先停掉 master（两者内存会冲突），然后前台运行：
+
+```bash
+scripts/master/master.sh stop
+scripts/legacy/run-m4-local.sh        # 监听 127.0.0.1:$M4_LOCAL_PORT（默认 8081），Ctrl-C 停止
+curl -fsS http://127.0.0.1:8081/health
+```
+
+浏览器打开 `http://127.0.0.1:8081/` 即 Web UI。该脚本已实测（Qwen3-VL-8B Q4_K_M：健康 ok、UI 200、约 43 tok/s）。想后台运行可用 `tmux new -d -s ai-m4-local scripts/legacy/run-m4-local.sh`。不要用 `legacy/cluster-mode.sh local`：它要求 SSH 到 M6，并会让 M6 也起一个独立服务；其 stop 逻辑也不认识新的 `ai-master` 会话。
 
 ### 在 M6 通过 SSH 隧道调用 M4 的 API
 
@@ -169,6 +181,8 @@ bash -c 'set -a; source config/cluster.env; set +a; exec python3 scripts/test-du
 | `CTX_SIZE` | 上下文长度 | 4096 |
 | `AI_ROOT` | llama.cpp、日志、venv 所在目录 | `$HOME/AI` |
 | `MODELS_DIR` | 模型目录，可在外置盘，如 `/Volumes/LaCie/AI/models`（未挂载会明确报错） | `$AI_ROOT/models` |
+| `MODEL_REPO` / `MODEL_FILE` | 单机模型（仅 M4 本机运行时使用） | 见模板 |
+| `M4_LOCAL_PORT` / `M6_LOCAL_PORT` | 单机模式 API 端口（M4 / M6） | 8081 / 8082 |
 | `M6_AI_ROOT` / `M6_MODELS_DIR` | 仅 `legacy/` 的 SSH 脚本使用 | `$HOME/AI` |
 
 模型目录布局为 **`MODELS_DIR/<owner>/<repo>/<file>.gguf`**（与 Hugging Face 仓库名一致）。
@@ -177,7 +191,9 @@ bash -c 'set -a; source config/cluster.env; set +a; exec python3 scripts/test-du
 
 | 现象 | 原因与处理 |
 |---|---|
-| `llama-ui-assets` 编译失败 | zip 源码构建号为 0，Web UI 资源下载不匹配；确认用的是当前 `bootstrap.sh`（已关闭预编译 UI）并 `rm -rf ~/AI/llama.cpp/build/tools/ui` 后重编 |
+| `llama-ui-assets` 编译失败 | 缺 Node/npm，或误用了预编译 UI（zip 源码构建号为 0，资源不匹配）；`brew install node`，确认用的是当前 `bootstrap.sh`，`rm -rf ~/AI/llama.cpp/build/tools/ui` 后重编 |
+| 打开 `/` 返回 404 | 该 `llama-server` 编译时没带 UI；重新运行 `setup` |
+| `curl /` 返回 415 `gzip is not supported` | 正常：UI 资源以 gzip 嵌入，curl 加 `--compressed`，浏览器不受影响 |
 | 推理 `Compute error` / `Insufficient Memory` | 单机放不下模型，或 worker 重启后 master 没重启 |
 | `master.sh start` 返回 4 | worker 未启动或端口不通：先 `worker.sh start`，再 `nc -z $M6_IP 50052` |
 | `M6_IP ... is not an address of this Mac` | Thunderbolt Bridge 未配置或 `cluster.env` 写错 |
